@@ -1,38 +1,60 @@
-from backend.db.connection import get_db_connection
+from backend.db.connection import db
 from backend.models.venta import Venta
+from backend.models.vendedor import Vendedor
+import datetime
+
 
 class VentaRepository:
     def get_ventas_by_date_range(self, fecha_inicio: str, fecha_fin: str) -> list[dict]:
-        """
-        Obtiene ventas y el nombre del vendedor dentro de un rango de fechas.
-        Retorna una lista de diccionarios (cada dict es una fila de resultado).
-        """
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            query = """
-                SELECT
-                    V.nombre AS nombre_vendedor,
-                    VT.monto_venta,
-                    VT.fecha_venta,
-                    VT.id_vendedor
-                FROM
-                    Venta AS VT
-                JOIN
-                    Vendedor AS V ON VT.id_vendedor = V.id_vendedor
-                WHERE
-                    VT.fecha_venta BETWEEN ? AND ?
-                ORDER BY V.nombre, VT.fecha_venta
-            """
-            ventas_raw = cursor.execute(query, (fecha_inicio, fecha_fin)).fetchall()
-            # Convertir Row objetos a diccionarios para ser más manejables
-            return [dict(row) for row in ventas_raw]
+        ventas_data = []
+        try:
+            db.connect(reuse_if_open=True)
 
-    def add_venta(self, venta: Venta):
-        """Agrega una nueva venta a la base de datos."""
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (?, ?, ?)",
-                (venta.id_vendedor, venta.fecha_venta, venta.monto_venta)
+            start_date = datetime.datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(fecha_fin, '%Y-%m-%d').date()
+
+            query = Venta.select(
+                Venta.id_vendedor,
+                Vendedor.nombre.alias('nombre_vendedor'),
+                Venta.monto_venta,
+                Venta.fecha_venta
+            ).join(Vendedor).where(
+                (Venta.fecha_venta >= start_date) &
+                (Venta.fecha_venta <= end_date)
+            ).order_by(Vendedor.nombre, Venta.fecha_venta)
+
+            for venta_item in query.dicts():
+                ventas_data.append({
+                    'id_vendedor': venta_item['id_vendedor'],
+                    'nombre_vendedor': venta_item['nombre_vendedor'],
+                    'monto_venta': venta_item['monto_venta'],
+                    'fecha_venta': venta_item['fecha_venta']
+                })
+        except Exception as e:
+            print(f"Error en VentaRepository.get_ventas_by_date_range: {e}")
+            raise
+        finally:
+            if not db.is_closed():
+                db.close()
+        return ventas_data
+
+    def add_venta(self, venta_data: dict) -> Venta:
+        try:
+            db.connect(reuse_if_open=True)
+
+            fecha_obj = datetime.datetime.strptime(venta_data['fecha_venta'], '%Y-%m-%d').date()
+
+            vendedor_instance = Vendedor.get_by_id(venta_data['id_vendedor'])
+
+            venta = Venta.create(
+                id_vendedor=vendedor_instance,
+                fecha_venta=fecha_obj,
+                monto_venta=venta_data['monto_venta']
             )
-            conn.commit()
+            return venta
+        except Exception as e:
+            print(f"Error en VentaRepository.add_venta: {e}")
+            raise
+        finally:
+            if not db.is_closed():
+                db.close()

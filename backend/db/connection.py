@@ -1,96 +1,58 @@
-import sqlite3
 import os
+from peewee import SqliteDatabase, Model, AutoField, FloatField, CharField, ForeignKeyField, DateField
 
-# Define la ruta de la base de datos para que esté dentro de una carpeta 'data' en backend
-DATABASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
-if not os.path.exists(DATABASE_DIR):
-    os.makedirs(DATABASE_DIR) # Crea la carpeta 'data' si no existe
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_DIR = os.path.join(BASE_DIR, '..', 'data')
+os.makedirs(DB_DIR, exist_ok=True)
 
-DATABASE = os.path.join(DATABASE_DIR, 'ventas.db')
+DATABASE_PATH = os.path.join(DB_DIR, 'ventas.db')
 
-def get_db_connection():
-    """Establece y retorna una conexión a la base de datos."""
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row  # Permite acceder a las columnas por nombre
-    return conn
+db = SqliteDatabase(DATABASE_PATH)
 
 def init_db():
-    """
-    Inicializa la base de datos: crea tablas e inserta datos de ejemplo
-    si no existen.
-    """
-    print(f"Inicializando base de datos en: {DATABASE}")
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
+    from backend.models.vendedor import Vendedor
+    from backend.models.venta import Venta
+    from backend.models.regla import Regla
+    import datetime
 
-        # Crear tabla Vendedor
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Vendedor (
-                id_vendedor INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT NOT NULL
-            )
-        ''')
+    db.connect()
 
-        # Crear tabla Venta
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Venta (
-                id_venta INTEGER PRIMARY KEY AUTOINCREMENT,
-                id_vendedor INTEGER,
-                fecha_venta TEXT NOT NULL, -- Formato YYYY-MM-DD
-                monto_venta REAL NOT NULL,
-                FOREIGN KEY (id_vendedor) REFERENCES Vendedor(id_vendedor)
-            )
-        ''')
+    try:
+        db.create_tables([Vendedor, Venta, Regla], safe=True)
 
-        # Crear tabla Regla
-        # NOTA: Los nombres de las columnas en la DB son 'monto_minimo_para_comision' y 'porcentaje_comision'
-        # para mapear 'Amount' y 'rule' respectivamente de tu imagen.
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Regla (
-                id_regla INTEGER PRIMARY KEY AUTOINCREMENT,
-                porcentaje_comision REAL NOT NULL,
-                monto_minimo_para_comision REAL NOT NULL
-            )
-        ''')
-        conn.commit()
+        with db.atomic():
+            if Vendedor.select().count() == 0:
+                Vendedor.create(nombre='Pedro Cadenas')
+                Vendedor.create(nombre='Maria Jimenez')
+                Vendedor.create(nombre='Juan Castro')
+                Vendedor.create(nombre='Luis Perez')
 
-        # Insertar datos de ejemplo si las tablas están vacías
-        # Vendedores
-        if not cursor.execute("SELECT 1 FROM Vendedor").fetchone():
-            print("Insertando vendedores de ejemplo...")
-            cursor.execute("INSERT INTO Vendedor (nombre) VALUES ('Pedro')")
-            cursor.execute("INSERT INTO Vendedor (nombre) VALUES ('Maria')")
-            cursor.execute("INSERT INTO Vendedor (nombre) VALUES ('Juan')")
-            conn.commit()
+            if Regla.select().count() == 0:
+                Regla.create(porcentaje_comision=0.06, monto_minimo_para_comision=500.0)
+                Regla.create(porcentaje_comision=0.08, monto_minimo_para_comision=600.0)
+                Regla.create(porcentaje_comision=0.1, monto_minimo_para_comision=800.0)
+                Regla.create(porcentaje_comision=0.15, monto_minimo_para_comision=1000.0)
 
-        # Reglas - ACTUALIZADO CON LOS DATOS DE LA IMAGEN
-        if not cursor.execute("SELECT 1 FROM Regla").fetchone():
-            print("Insertando reglas de ejemplo...")
-            cursor.execute("INSERT INTO Regla (porcentaje_comision, monto_minimo_para_comision) VALUES (0.06, 600.0)")
-            cursor.execute("INSERT INTO Regla (porcentaje_comision, monto_minimo_para_comision) VALUES (0.08, 500.0)")
-            cursor.execute("INSERT INTO Regla (porcentaje_comision, monto_minimo_para_comision) VALUES (0.1, 800.0)")
-            cursor.execute("INSERT INTO Regla (porcentaje_comision, monto_minimo_para_comision) VALUES (1.15, 1000.0)") # Nota: 1.15 es 115%, si fuera 15% debería ser 0.15
-            conn.commit()
-            print("Reglas de ejemplo insertadas.")
+            if Venta.select().count() == 0:
+                pedro = Vendedor.get(nombre='Pedro Cadenas')
+                maria = Vendedor.get(nombre='Maria Jimenez')
+                juan = Vendedor.get(nombre='Juan Castro')
+                luis = Vendedor.get(nombre='Luis Perez')
 
-        # Ventas
-        if not cursor.execute("SELECT 1 FROM Venta").fetchone():
-            print("Insertando ventas de ejemplo...")
-            # Ventas para Pedro (ID 1)
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (1, '2025-06-01', 50.0)")
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (1, '2025-06-05', 30.0)") # Total 80
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (1, '2025-06-10', 500.0)") # Total con las dos anteriores: 580
+                Venta.create(id_vendedor=pedro, fecha_venta=datetime.date(2025, 6, 1), monto_venta=50.0)
+                Venta.create(id_vendedor=pedro, fecha_venta=datetime.date(2025, 6, 5), monto_venta=30.0)
+                Venta.create(id_vendedor=pedro, fecha_venta=datetime.date(2025, 6, 10), monto_venta=500.0)
 
-            # Ventas para Maria (ID 2)
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (2, '2025-05-29', 100.0)") # Fuera del rango de junio
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (2, '2025-06-15', 70.0)") # Total 70, no comisiona
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (2, '2025-06-20', 750.0)") # Total 820
+                Venta.create(id_vendedor=maria, fecha_venta=datetime.date(2025, 5, 29), monto_venta=100.0)
+                Venta.create(id_vendedor=maria, fecha_venta=datetime.date(2025, 6, 15), monto_venta=70.0)
+                Venta.create(id_vendedor=maria, fecha_venta=datetime.date(2025, 6, 20), monto_venta=750.0)
 
-            # Ventas para Juan (ID 3)
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (3, '2025-06-03', 90.0)")
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (3, '2025-06-07', 5.0)") # Total 95
-            cursor.execute("INSERT INTO Venta (id_vendedor, fecha_venta, monto_venta) VALUES (3, '2025-06-25', 950.0)") # Total 1045
-            conn.commit()
-            print("Datos de ejemplo insertados.")
-        else:
-            print("Datos de ejemplo ya existen. Saltando inserción.")
+                Venta.create(id_vendedor=juan, fecha_venta=datetime.date(2025, 6, 3), monto_venta=90.0)
+                Venta.create(id_vendedor=juan, fecha_venta=datetime.date(2025, 6, 7), monto_venta=5.0)
+                Venta.create(id_vendedor=juan, fecha_venta=datetime.date(2025, 6, 25), monto_venta=950.0)
+
+                Venta.create(id_vendedor=luis, fecha_venta=datetime.date(2025, 6, 15), monto_venta=300.0)
+                Venta.create(id_vendedor=luis, fecha_venta=datetime.date(2025, 6, 20), monto_venta=270.0)
+    finally:
+        if not db.is_closed():
+            db.close()
