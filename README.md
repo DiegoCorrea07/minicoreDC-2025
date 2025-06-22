@@ -195,7 +195,7 @@ https://github.com/DiegoCorrea07/frontend-minicore-2025.git
 
 ## Enlace de página desplegada en render
 ```
-
+https://frontend-minicore-2025.onrender.com
 ```
 
 ## Consideraciones de Producción
