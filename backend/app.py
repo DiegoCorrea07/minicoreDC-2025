@@ -2,7 +2,6 @@ import tornado.ioloop
 import tornado.web
 import os
 import signal
-
 from backend.db.connection import init_db, db
 from backend.views.handlers import ComisionHandler
 

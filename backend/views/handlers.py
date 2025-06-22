@@ -1,11 +1,8 @@
 import json
 import tornado.web
 import traceback
-
-# Importa tu controlador de comisiones
 from backend.controllers.comision_controller import ComisionController
 from backend.utils.validations import Validations
-
 
 class CORSRequestHandler(tornado.web.RequestHandler):
     """
